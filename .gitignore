@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.venv/
+__pycache__/
+*.pyc
+backend/models/*.joblib
+backend/models/metrics.json
+backend/.pytest_cache/
+frontend/.vite/
+frontend/preview.log
+frontend/preview.err.log

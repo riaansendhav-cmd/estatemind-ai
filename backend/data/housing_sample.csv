@@ -1,0 +1,13 @@
+price,location,area,bedrooms,bathrooms,furnishing,parking
+5600000,Pune,680,1,1,Furnished,1
+7200000,Pune,920,2,2,Semi-Furnished,1
+9900000,Bengaluru,1180,2,2,Furnished,1
+13800000,Bengaluru,2100,4,4,Furnished,2
+16400000,Delhi,1650,3,3,Unfurnished,2
+18500000,Mumbai,1450,3,3,Semi-Furnished,2
+22200000,Hyderabad,2600,4,5,Semi-Furnished,3
+31000000,Chennai,2850,5,5,Furnished,3
+12000000,Hyderabad,1500,3,3,Furnished,2
+8700000,Chennai,1250,2,2,Semi-Furnished,1
+24600000,Mumbai,2250,4,4,Furnished,2
+7600000,Delhi,950,2,2,Unfurnished,1
