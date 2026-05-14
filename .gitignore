@@ -10,3 +10,5 @@ backend/.pytest_cache/
 frontend/.vite/
 frontend/preview.log
 frontend/preview.err.log
+
+.vercel
