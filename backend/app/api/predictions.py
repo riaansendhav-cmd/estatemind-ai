@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from app.core.auth import current_user
 from app.core.database import get_database
 from app.ml.predictor import predictor
 
@@ -18,7 +21,7 @@ class PredictionRequest(BaseModel):
 
 
 @router.post("")
-async def predict_price(payload: PredictionRequest):
+async def predict_price(payload: PredictionRequest, user: Annotated[dict, Depends(current_user)]):
     request = payload.model_dump()
     result = predictor.predict(request)
     db = get_database()
@@ -27,6 +30,7 @@ async def predict_price(payload: PredictionRequest):
             {
                 "input": request,
                 "result": result,
+                "user_id": user["id"],
                 "created_at": datetime.now(timezone.utc),
             }
         )

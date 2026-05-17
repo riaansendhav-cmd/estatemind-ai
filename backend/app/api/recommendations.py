@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from app.api.properties import load_properties
+from app.core.auth import current_user
 from app.core.database import get_database
 from app.ml.recommender import recommend
 
@@ -16,7 +19,7 @@ class RecommendationRequest(BaseModel):
 
 
 @router.post("")
-async def get_recommendations(payload: RecommendationRequest):
+async def get_recommendations(payload: RecommendationRequest, user: Annotated[dict, Depends(current_user)]):
     preferences = payload.model_dump()
     properties = await load_properties()
     results = recommend(properties, preferences)
@@ -26,6 +29,7 @@ async def get_recommendations(payload: RecommendationRequest):
             {
                 "preferences": preferences,
                 "result_ids": [item["id"] for item in results],
+                "user_id": user["id"],
                 "created_at": datetime.now(timezone.utc),
             }
         )

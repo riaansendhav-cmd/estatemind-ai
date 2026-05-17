@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     model_path: str = "models/price_model.joblib"
     metrics_path: str = "models/metrics.json"
+    auth_secret: str = "change-this-local-development-secret"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

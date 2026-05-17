@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Query
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from app.core.auth import current_user, optional_user
 from app.core.database import get_database
 from app.data.sample_properties import SAMPLE_PROPERTIES
 
@@ -28,13 +31,27 @@ async def load_properties() -> list[dict]:
     db = get_database()
     try:
         docs = await db.properties.find({}, {"_id": 0}).to_list(length=200)
-        return docs or SAMPLE_PROPERTIES
+        sample_ids = {item["id"] for item in docs}
+        samples = [item for item in SAMPLE_PROPERTIES if item["id"] not in sample_ids]
+        return [*docs, *samples]
     except Exception:
         return SAMPLE_PROPERTIES
 
 
+async def user_saved_ids(user_id: str | None) -> set[str]:
+    if not user_id:
+        return set()
+    db = get_database()
+    try:
+        docs = await db.saved_properties.find({"user_id": user_id}, {"_id": 0, "property_id": 1}).to_list(length=1000)
+        return {doc["property_id"] for doc in docs}
+    except Exception:
+        return set()
+
+
 @router.get("")
 async def list_properties(
+    user: Annotated[dict | None, Depends(optional_user)],
     search: str = "",
     location: str = "",
     property_type: str = "",
@@ -44,6 +61,8 @@ async def list_properties(
     sort: str = "recommended",
 ):
     properties = await load_properties()
+    saved_ids = await user_saved_ids(user["id"] if user else None)
+    properties = [{**item, "saved": item["id"] in saved_ids} for item in properties]
 
     if search:
         needle = search.lower()
@@ -76,10 +95,12 @@ async def list_properties(
 
 
 @router.post("")
-async def create_property(payload: PropertyCreate):
+async def create_property(payload: PropertyCreate, user: Annotated[dict, Depends(current_user)]):
     data = payload.model_dump()
     data["id"] = data["title"].lower().replace(" ", "-")[:42]
     data["saved"] = False
+    data["owner_id"] = user["id"]
+    data["seller_name"] = data["seller_name"] or user["name"]
     if not data["image"]:
         data["image"] = "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80"
 
@@ -88,25 +109,25 @@ async def create_property(payload: PropertyCreate):
         existing_count = await db.properties.count_documents({"id": data["id"]})
         if existing_count:
             data["id"] = f"{data['id']}-{existing_count + 1}"
-        await db.properties.insert_one(data)
+        await db.properties.insert_one(data.copy())
         return {**data, "published": True}
     except Exception:
         return {**data, "published": False, "offline": True}
 
 
 @router.post("/{property_id}/save")
-async def toggle_saved(property_id: str):
+async def toggle_saved(property_id: str, user: Annotated[dict, Depends(current_user)]):
     db = get_database()
     try:
-        existing = await db.saved_properties.find_one({"property_id": property_id})
+        query = {"property_id": property_id, "user_id": user["id"]}
+        existing = await db.saved_properties.find_one(query)
         if existing:
-            await db.saved_properties.delete_one({"property_id": property_id})
+            await db.saved_properties.delete_one(query)
             saved = False
         else:
-            await db.saved_properties.insert_one({"property_id": property_id})
+            await db.saved_properties.insert_one({"property_id": property_id, "user_id": user["id"]})
             saved = True
 
-        await db.properties.update_one({"id": property_id}, {"$set": {"saved": saved}})
         return {"property_id": property_id, "saved": saved}
     except Exception:
-        return {"property_id": property_id, "saved": True, "offline": True}
+        return {"property_id": property_id, "saved": False, "offline": True}

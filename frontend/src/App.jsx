@@ -5,7 +5,8 @@ import Listings from "./pages/Listings";
 import Predictor from "./pages/Predictor";
 import Recommendations from "./pages/Recommendations";
 import SellProperty from "./pages/SellProperty";
-import { api } from "./services/api";
+import AuthPage from "./pages/AuthPage";
+import { api, getSession } from "./services/api";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("Listings");
@@ -13,6 +14,7 @@ export default function App() {
   const [properties, setProperties] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [toast, setToast] = useState(null);
+  const [session, setSession] = useState(getSession());
   const [filters, setFilters] = useState({
     search: "",
     location: "",
@@ -24,11 +26,13 @@ export default function App() {
   });
 
   async function refreshProperties() {
+    if (!session) return;
     const data = await api.getProperties(filters);
     setProperties(data.items);
   }
 
   async function refreshDashboard() {
+    if (!session) return;
     const data = await api.dashboard();
     setDashboard(data);
   }
@@ -44,17 +48,35 @@ export default function App() {
     await refreshDashboard();
   }
 
+  async function logout() {
+    await api.logout();
+    setSession(null);
+    setProperties([]);
+    setDashboard(null);
+    setActiveTab("Listings");
+  }
+
   useEffect(() => {
     refreshProperties().catch(console.error);
-  }, [filters]);
+  }, [filters, session]);
+
+  useEffect(() => {
+    api.me().then((currentSession) => {
+      if (currentSession) setSession(currentSession);
+    }).catch(console.error);
+  }, []);
 
   useEffect(() => {
     refreshDashboard().catch(console.error);
-  }, []);
+  }, [session]);
+
+  if (!session) {
+    return <AuthPage onAuthed={setSession} />;
+  }
 
   return (
     <main className={darkMode ? "app dark" : "app light"}>
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} darkMode={darkMode} setDarkMode={setDarkMode} />
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} darkMode={darkMode} setDarkMode={setDarkMode} user={session.user} onLogout={logout} />
       {toast && <div className="toast">{toast}</div>}
       <div className="shell">
         {activeTab === "Listings" && <Listings properties={properties} filters={filters} setFilters={setFilters} onSave={toggleSaved} />}

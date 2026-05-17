@@ -3,22 +3,41 @@ import { mockDashboard, mockProperties } from "./mockData";
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const STORAGE_KEY = "estatemind_user_properties";
 const SAVED_KEY = "estatemind_saved_property_ids";
+const SESSION_KEY = "estatemind_session";
+const USERS_KEY = "estatemind_local_users";
+
+export function getSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function setSession(session) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function userKey(base) {
+  const session = getSession();
+  return `${base}_${session?.user?.id || "guest"}`;
+}
 
 function savedIds() {
   try {
-    return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]");
+    return JSON.parse(localStorage.getItem(userKey(SAVED_KEY)) || "[]");
   } catch {
     return [];
   }
 }
 
 function writeSavedIds(ids) {
-  localStorage.setItem(SAVED_KEY, JSON.stringify([...new Set(ids)]));
+  localStorage.setItem(userKey(SAVED_KEY), JSON.stringify([...new Set(ids)]));
 }
 
 function applySavedState(items) {
   const ids = new Set(savedIds());
-  return items.map((item) => ({ ...item, saved: ids.has(item.id) || Boolean(item.saved) }));
+  return items.map((item) => ({ ...item, saved: ids.has(item.id) }));
 }
 
 function storedProperties() {
@@ -63,12 +82,15 @@ function localPrediction(payload) {
 }
 
 function localProperty(payload) {
+  const session = getSession();
   return {
     ...payload,
     id: `${payload.title.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
     image: payload.image || "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80",
     listing_status: payload.listing_status || "For Sale",
     property_type: payload.property_type || "Apartment",
+    seller_name: payload.seller_name || session?.user?.name || "Owner",
+    owner_id: session?.user?.id || "local-owner",
     saved: false,
     published: true,
     offline: true,
@@ -78,8 +100,13 @@ function localProperty(payload) {
 async function request(path, options = {}, timeoutMs = 3500) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const session = getSession();
   const response = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+      ...(options.headers || {}),
+    },
     signal: controller.signal,
     ...options,
   }).finally(() => window.clearTimeout(timeout));
@@ -89,7 +116,68 @@ async function request(path, options = {}, timeoutMs = 3500) {
   return response.json();
 }
 
+function localUsers() {
+  try {
+    return JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function localAuthSession(payload, mode) {
+  const email = payload.email.toLowerCase().trim();
+  const users = localUsers();
+  let user = users.find((item) => item.email === email);
+
+  if (mode === "register") {
+    if (user) throw new Error("Email already registered");
+    user = {
+      id: `local-${Date.now()}`,
+      name: payload.name?.trim() || email.split("@")[0],
+      email,
+      password: payload.password,
+    };
+    writeLocalUsers([...users, user]);
+  } else if (!user || user.password !== payload.password) {
+    throw new Error("Invalid email or password");
+  }
+
+  const session = {
+    user: { id: user.id, name: user.name, email: user.email },
+    token: `local-token-${user.id}`,
+    local: true,
+  };
+  setSession(session);
+  return session;
+}
+
 export const api = {
+  register: (payload) => request("/api/auth/register", { method: "POST", body: JSON.stringify(payload) }, 5000)
+    .then((session) => {
+      setSession(session);
+      return session;
+    })
+    .catch(() => localAuthSession(payload, "register")),
+  login: (payload) => request("/api/auth/login", { method: "POST", body: JSON.stringify(payload) }, 5000)
+    .then((session) => {
+      setSession(session);
+      return session;
+    })
+    .catch(() => localAuthSession(payload, "login")),
+  me: () => {
+    const session = getSession();
+    if (!session) return Promise.resolve(null);
+    if (session.local) return Promise.resolve(session);
+    return request("/api/auth/me").then(({ user }) => ({ ...session, user })).catch(() => session);
+  },
+  logout: () => {
+    localStorage.removeItem(SESSION_KEY);
+    return Promise.resolve();
+  },
   getProperties: (params = {}) => {
     const search = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
