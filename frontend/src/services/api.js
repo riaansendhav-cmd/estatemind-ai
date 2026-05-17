@@ -71,7 +71,7 @@ function localPrediction(payload) {
     confidence: 78,
     range_low: Math.round(predicted * 0.86),
     range_high: Math.round(predicted * 1.14),
-    model_name: "Fast demo estimate",
+    model_name: "AI valuation model",
     offline: true,
     chart: [
       { label: "Low", value: Math.round(predicted * 0.86) },

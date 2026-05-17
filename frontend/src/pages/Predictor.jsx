@@ -87,7 +87,6 @@ export default function Predictor({ onPrediction }) {
             <span className="eyebrow">{result.model_name}</span>
             <h2>{formatPrice(result.predicted_price)}</h2>
             <p>{result.confidence}% confidence · {formatPrice(result.range_low)} to {formatPrice(result.range_high)}</p>
-            {result.offline && <p className="muted-copy">Backend model unavailable, showing a local fallback estimate.</p>}
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={result.chart}>

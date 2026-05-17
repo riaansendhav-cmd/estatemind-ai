@@ -154,7 +154,7 @@ export default function SellProperty({ onPublished }) {
             <span className="eyebrow">Published listing</span>
             <PropertyCard property={published} compact />
             <p className="muted-copy">
-              This listing now appears in property search. With MongoDB running, it is saved for all users; in demo mode, it is saved in this browser.
+              Your listing is live and visible in property search.
             </p>
           </>
         ) : (
